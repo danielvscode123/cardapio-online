@@ -5,6 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { colors } from '@/constants/theme';
+import { AuthProvider } from '@/providers/auth-provider';
+import { QueryProvider } from '@/providers/query-provider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -26,11 +28,15 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        contentStyle: { backgroundColor: colors.canvas },
-        headerShown: false,
-      }}
-    />
+    <QueryProvider>
+      <AuthProvider>
+        <Stack
+          screenOptions={{
+            contentStyle: { backgroundColor: colors.canvas },
+            headerShown: false,
+          }}
+        />
+      </AuthProvider>
+    </QueryProvider>
   );
 }

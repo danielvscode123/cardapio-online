@@ -1,13 +1,13 @@
-import { Redirect } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 
 import { BrandSplash } from '@/components/brand-splash';
 import { useAuth } from '@/providers/auth-provider';
 
-export default function IndexScreen() {
+export default function AppLayout() {
   const { loading, session, profile } = useAuth();
 
   if (loading) {
-    return <BrandSplash message="Organizando o salão…" />;
+    return <BrandSplash />;
   }
 
   if (!session) {
@@ -18,5 +18,5 @@ export default function IndexScreen() {
     return <Redirect href="/(auth)/activation" />;
   }
 
-  return <Redirect href="/(app)/(tabs)/waiter" />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
