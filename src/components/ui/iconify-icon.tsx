@@ -1,9 +1,9 @@
-import Storage from 'expo-sqlite/kv-store';
 import { memo, useEffect, useState } from 'react';
 import { ColorValue, StyleSheet, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 import { colors, radius } from '@/constants/theme';
+import { iconCache } from '@/lib/icon-cache';
 
 type IconifyIconProps = {
   icon: `${string}:${string}`;
@@ -30,7 +30,7 @@ async function loadSvg(icon: IconifyIconProps['icon'], size: number, color: Colo
     return memoryValue;
   }
 
-  const storedValue = await Storage.getItem(cacheKey);
+  const storedValue = await iconCache.getItem(cacheKey);
   if (storedValue) {
     svgMemoryCache.set(cacheKey, storedValue);
     return storedValue;
@@ -48,7 +48,7 @@ async function loadSvg(icon: IconifyIconProps['icon'], size: number, color: Colo
 
     const svg = await response.text();
     svgMemoryCache.set(cacheKey, svg);
-    await Storage.setItem(cacheKey, svg);
+    await iconCache.setItem(cacheKey, svg);
     return svg;
   });
 
@@ -67,9 +67,12 @@ function IconifyIconComponent({
   color = colors.ink,
   accessibilityLabel,
 }: IconifyIconProps) {
-  const [svg, setSvg] = useState(() =>
-    svgMemoryCache.get(`iconify:${icon}:${size}:${String(color)}`),
-  );
+  const cacheKey = `iconify:${icon}:${size}:${String(color)}`;
+  const [loaded, setLoaded] = useState(() => ({
+    key: cacheKey,
+    svg: svgMemoryCache.get(cacheKey),
+  }));
+  const svg = loaded.key === cacheKey ? loaded.svg : undefined;
 
   useEffect(() => {
     let isMounted = true;
@@ -77,19 +80,19 @@ function IconifyIconComponent({
     loadSvg(icon, size, color)
       .then((value) => {
         if (isMounted) {
-          setSvg(value);
+          setLoaded({ key: cacheKey, svg: value });
         }
       })
       .catch(() => {
         if (isMounted) {
-          setSvg(undefined);
+          setLoaded({ key: cacheKey, svg: undefined });
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [color, icon, size]);
+  }, [cacheKey, color, icon, size]);
 
   if (!svg) {
     return (

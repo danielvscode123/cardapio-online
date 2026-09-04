@@ -677,6 +677,20 @@ begin
     raise exception 'Table session is not open';
   end if;
 
+  if exists (
+    select 1
+    from public.orders
+    where table_session_id = p_table_session_id
+      and status in ('sent', 'preparing')
+  ) then
+    raise exception 'There are orders still being prepared';
+  end if;
+
+  update public.orders
+  set status = 'delivered'
+  where table_session_id = p_table_session_id
+    and status = 'ready';
+
   select coalesce(sum(item.subtotal), 0)
   into session_total
   from public.orders order_row

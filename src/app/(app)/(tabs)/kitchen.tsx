@@ -8,6 +8,7 @@ import { IconifyIcon } from '@/components/ui/iconify-icon';
 import { Screen } from '@/components/ui/screen';
 import { colors, fonts, radius, shadow, spacing } from '@/constants/theme';
 import { useKitchenOrders, useUpdateOrderStatus } from '@/features/operations/queries';
+import { getNextKitchenStatus } from '@/features/operations/rules';
 import { KitchenOrder } from '@/features/operations/types';
 import { formatTime, minutesSince } from '@/lib/format';
 import { OrderStatus } from '@/types/domain';
@@ -92,7 +93,8 @@ export default function KitchenScreen() {
   const orders = (kitchenQuery.data ?? []).filter((order) => filter === 'all' || order.status === filter);
 
   const handleAdvance = async (order: KitchenOrder) => {
-    const nextStatus: OrderStatus = order.status === 'sent' ? 'preparing' : 'ready';
+    const nextStatus = getNextKitchenStatus(order.status);
+    if (!nextStatus) return;
     setUpdatingOrderId(order.id);
     try {
       await updateStatus.mutateAsync({ orderId: order.id, status: nextStatus });

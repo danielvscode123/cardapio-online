@@ -6,9 +6,19 @@ import { AppState, Platform } from 'react-native';
 
 import { env } from '@/lib/env';
 
+const serverStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
+
+const authStorage = typeof globalThis.localStorage === 'undefined'
+  ? serverStorage
+  : globalThis.localStorage;
+
 export const supabase = createClient(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
-    storage: localStorage,
+    storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

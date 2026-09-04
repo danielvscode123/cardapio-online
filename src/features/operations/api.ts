@@ -11,6 +11,7 @@ import {
   Order,
   SendOrderInput,
 } from './types';
+import { calculateSessionTotal } from './rules';
 
 function throwIfError(error: { message: string } | null) {
   if (error) {
@@ -108,10 +109,7 @@ export async function listDiningTables(): Promise<DiningTable[]> {
   return (tables ?? []).map((table) => {
     const session = sessionsByTable.get(table.id) ?? null;
     const activeOrders = session?.orders.filter((order) => order.status !== 'cancelled') ?? [];
-    const total = activeOrders.reduce(
-      (sum, order) => sum + order.order_items.reduce((orderSum, item) => orderSum + item.subtotal, 0),
-      0,
-    );
+    const total = calculateSessionTotal(session?.orders ?? []);
 
     return {
       id: table.id,

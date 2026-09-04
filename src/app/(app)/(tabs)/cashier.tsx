@@ -17,6 +17,7 @@ import { IconifyIcon } from '@/components/ui/iconify-icon';
 import { Screen } from '@/components/ui/screen';
 import { colors, fonts, radius, shadow, spacing } from '@/constants/theme';
 import { useCashierSessions, useCloseTableSession } from '@/features/operations/queries';
+import { countSessionItems } from '@/features/operations/rules';
 import { CashierSession } from '@/features/operations/types';
 import { formatCurrency, formatTime } from '@/lib/format';
 import { PaymentMethod } from '@/types/domain';
@@ -48,9 +49,8 @@ function CheckoutCard({
   onMethodChange,
   onPay,
 }: CheckoutCardProps) {
-  const itemCount = session.orders
-    .filter((order) => order.status !== 'cancelled')
-    .reduce((sum, order) => sum + order.order_items.reduce((orderSum, item) => orderSum + item.quantity, 0), 0);
+  const itemCount = countSessionItems(session.orders);
+  const pendingOrders = session.orders.filter((order) => ['sent', 'preparing'].includes(order.status)).length;
 
   return (
     <View style={[styles.card, expanded && styles.cardExpanded]}>
@@ -79,6 +79,15 @@ function CheckoutCard({
           <Text style={styles.metaText}>desde {formatTime(session.opened_at)}</Text>
         </View>
       </View>
+
+      {pendingOrders > 0 ? (
+        <View style={styles.pendingNotice}>
+          <IconifyIcon icon="solar:clock-circle-bold-duotone" size={20} color={colors.ink} />
+          <Text style={styles.pendingNoticeText}>
+            {pendingOrders === 1 ? '1 pedido ainda está em produção.' : `${pendingOrders} pedidos ainda estão em produção.`}
+          </Text>
+        </View>
+      ) : null}
 
       {expanded ? (
         <View style={styles.checkoutPanel}>
@@ -111,6 +120,7 @@ function CheckoutCard({
               <Text style={styles.confirmValue}>{formatCurrency(session.balance)}</Text>
             </View>
             <Button
+              disabled={pendingOrders > 0}
               icon="solar:check-circle-bold"
               label="Confirmar"
               loading={loading}
@@ -121,6 +131,7 @@ function CheckoutCard({
         </View>
       ) : (
         <Button
+          disabled={pendingOrders > 0}
           icon="solar:wallet-money-bold-duotone"
           label="Receber e liberar mesa"
           onPress={onExpand}
@@ -285,6 +296,15 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   metaText: { color: colors.muted, fontFamily: fonts.body, fontSize: 10 },
+  pendingNotice: {
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: '#F2DFA8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pendingNoticeText: { flex: 1, color: colors.ink, fontFamily: fonts.bodyBold, fontSize: 11 },
   checkoutPanel: { gap: spacing.lg },
   paymentLabel: { color: colors.ink, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.2 },
   paymentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

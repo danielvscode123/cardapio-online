@@ -90,6 +90,10 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Corpo da requisição inválido.' }, 400);
   }
 
+  if (!body || typeof body !== 'object') {
+    return jsonResponse({ error: 'Corpo da requisição inválido.' }, 400);
+  }
+
   if (body.action === 'create') {
     const name = body.name?.trim();
     const email = body.email?.trim().toLowerCase();
