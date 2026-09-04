@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Controller, useForm } from 'react-hook-form';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,9 +34,13 @@ type LoginValues = z.infer<typeof loginSchema>;
 type SetupValues = z.infer<typeof setupSchema>;
 
 function LoginForm({ onShowSetup }: { onShowSetup: () => void }) {
-  const { signIn } = useAuth();
+  const { resendConfirmation, signIn } = useAuth();
+  const [resending, setResending] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
   const {
+    clearErrors,
     control,
+    getValues,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
@@ -47,11 +50,49 @@ function LoginForm({ onShowSetup }: { onShowSetup: () => void }) {
   });
 
   const submit = handleSubmit(async ({ email, password }) => {
+    setConfirmationSent(false);
     const result = await signIn(email, password);
     if (result.error) {
-      setError('root', { message: 'E-mail ou senha incorretos. Tente novamente.' });
+      const canResendConfirmation = ['email_not_confirmed', 'invalid_credentials'].includes(
+        result.errorCode ?? '',
+      );
+      setError('root', {
+        type: canResendConfirmation ? 'email_confirmation' : 'server',
+        message:
+          result.errorCode === 'email_not_confirmed'
+            ? 'Seu e-mail ainda não foi confirmado.'
+            : canResendConfirmation
+              ? 'Não foi possível entrar. Confira a senha e se o e-mail já foi confirmado.'
+              : 'O login está indisponível agora. Tente novamente em alguns instantes.',
+      });
     }
   });
+
+  const resend = async () => {
+    const emailResult = loginSchema.shape.email.safeParse(getValues('email'));
+    if (!emailResult.success) {
+      setError('email', { message: 'Informe um e-mail válido para reenviar a confirmação.' });
+      return;
+    }
+
+    setResending(true);
+    setConfirmationSent(false);
+    const result = await resendConfirmation(emailResult.data);
+    setResending(false);
+
+    if (result.error) {
+      setError('root', {
+        message:
+          result.errorCode === 'over_email_send_rate_limit'
+            ? 'O limite de envios foi atingido. Aguarde alguns minutos e tente novamente.'
+            : 'Não foi possível reenviar agora. Tente novamente em alguns instantes.',
+      });
+      return;
+    }
+
+    clearErrors('root');
+    setConfirmationSent(true);
+  };
 
   return (
     <View style={styles.form}>
@@ -98,7 +139,30 @@ function LoginForm({ onShowSetup }: { onShowSetup: () => void }) {
         )}
       />
 
-      {errors.root?.message ? <Text style={styles.formError}>{errors.root.message}</Text> : null}
+      {errors.root?.message ? (
+        <View style={styles.formNotice}>
+          <IconifyIcon icon="solar:letter-bold" size={20} color={colors.danger} />
+          <View style={styles.formNoticeCopy}>
+            <Text style={styles.formError}>{errors.root.message}</Text>
+            {errors.root.type === 'email_confirmation' ? (
+              <Pressable accessibilityRole="button" disabled={resending} onPress={() => void resend()}>
+                <Text style={styles.resendLink}>
+                  {resending ? 'Reenviando…' : 'Reenviar confirmação por e-mail'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {confirmationSent ? (
+        <View style={[styles.formNotice, styles.successNotice]}>
+          <IconifyIcon icon="solar:check-circle-bold" size={20} color={colors.success} />
+          <Text style={styles.successText}>
+            Se houver um cadastro pendente, enviamos um novo link. Confira também a pasta de spam.
+          </Text>
+        </View>
+      ) : null}
 
       <Button
         icon="solar:arrow-right-bold"
@@ -116,7 +180,10 @@ function LoginForm({ onShowSetup }: { onShowSetup: () => void }) {
 }
 
 function SetupForm({ onBack }: { onBack: () => void }) {
-  const { createInitialManager } = useAuth();
+  const { createInitialManager, resendConfirmation } = useAuth();
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -135,13 +202,50 @@ function SetupForm({ onBack }: { onBack: () => void }) {
     }
 
     if (result.requiresEmailConfirmation) {
-      Alert.alert(
-        'Confirme seu e-mail',
-        'Enviamos uma confirmação. Depois de confirmar, volte e entre com sua senha.',
-        [{ text: 'Entendi', onPress: onBack }],
-      );
+      setConfirmationEmail(email.trim().toLowerCase());
     }
   });
+
+  const resend = async () => {
+    if (!confirmationEmail) return;
+    setResending(true);
+    setResendMessage(null);
+    const result = await resendConfirmation(confirmationEmail);
+    setResending(false);
+    setResendMessage(
+      result.error
+        ? result.errorCode === 'over_email_send_rate_limit'
+          ? 'Muitos envios em pouco tempo. Aguarde alguns minutos.'
+          : 'Não foi possível reenviar agora.'
+        : 'Novo link enviado. Confira também a pasta de spam.',
+    );
+  };
+
+  if (confirmationEmail) {
+    return (
+      <View style={styles.form}>
+        <View style={styles.confirmationIcon}>
+          <IconifyIcon icon="solar:letter-opened-bold" size={34} color={colors.cream} />
+        </View>
+        <View style={styles.formHeading}>
+          <Text style={styles.formTitle}>Confira seu e-mail.</Text>
+          <Text style={styles.formSubtitle}>
+            Enviamos um link para <Text style={styles.emailStrong}>{confirmationEmail}</Text>. Abra o link
+            para confirmar o acesso e depois volte para entrar.
+          </Text>
+        </View>
+        {resendMessage ? <Text style={styles.helperMessage}>{resendMessage}</Text> : null}
+        <Button
+          icon="solar:letter-bold"
+          label="Reenviar confirmação"
+          loading={resending}
+          onPress={() => void resend()}
+          variant="secondary"
+        />
+        <Button label="Já confirmei, ir para o login" onPress={onBack} variant="ghost" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.form}>
@@ -222,7 +326,7 @@ export default function LoginScreen() {
   return (
     <LinearGradient colors={[colors.ink, '#204C3E']} style={styles.page}>
       <StatusBar style="light" />
-      <View pointerEvents="none" style={styles.decorativeDisc} />
+      <View style={[styles.decorativeDisc, styles.noPointerEvents]} />
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -282,6 +386,7 @@ const styles = StyleSheet.create({
     top: -100,
     right: -120,
   },
+  noPointerEvents: { pointerEvents: 'none' },
   brand: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -358,6 +463,34 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 13,
   },
+  formNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: '#F7DDD5',
+  },
+  formNoticeCopy: { flex: 1, gap: spacing.xs },
+  resendLink: {
+    color: colors.ink,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  successNotice: { backgroundColor: '#DDEBDD' },
+  successText: { flex: 1, color: colors.success, fontFamily: fonts.bodyBold, fontSize: 12, lineHeight: 18 },
+  confirmationIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+    transform: [{ rotate: '-3deg' }],
+  },
+  emailStrong: { color: colors.ink, fontFamily: fonts.bodyBold },
+  helperMessage: { color: colors.muted, fontFamily: fonts.bodyBold, fontSize: 12, lineHeight: 18 },
   setupLink: {
     alignItems: 'center',
     justifyContent: 'center',

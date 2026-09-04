@@ -12,7 +12,7 @@ export const supabase = createClient<Database>(env.supabaseUrl, env.supabasePubl
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 

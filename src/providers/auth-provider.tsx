@@ -1,10 +1,18 @@
 import { Session } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
+import { parseAuthCallbackUrl } from '@/lib/auth-callback';
+import { getAuthRedirectUrl } from '@/lib/auth-links';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types/domain';
 
-type AuthResult = { error?: string; requiresEmailConfirmation?: boolean };
+type AuthResult = {
+  error?: string;
+  errorCode?: string;
+  requiresEmailConfirmation?: boolean;
+};
 
 type AuthContextValue = {
   session: Session | null;
@@ -14,6 +22,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   createInitialManager: (name: string, email: string, password: string) => Promise<AuthResult>;
+  resendConfirmation: (email: string) => Promise<AuthResult>;
   claimInitialManager: (name: string) => Promise<AuthResult>;
   refreshProfile: () => Promise<void>;
 };
@@ -75,13 +84,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, [loadProfile]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const consumeAuthUrl = async (url: string) => {
+      const { accessToken, refreshToken, code } = parseAuthCallbackUrl(url);
+
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      }
+    };
+
+    void Linking.getInitialURL().then((url) => {
+      if (url) void consumeAuthUrl(url);
+    });
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void consumeAuthUrl(url);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
 
-    return error ? { error: error.message } : {};
+    return error ? { error: error.message, errorCode: error.code } : {};
   }, []);
 
   const signOut = useCallback(async () => {
@@ -108,11 +144,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { data: { full_name: name.trim() } },
+        options: {
+          data: { full_name: name.trim() },
+          emailRedirectTo: getAuthRedirectUrl(),
+        },
       });
 
       if (error) {
-        return { error: error.message };
+        return { error: error.message, errorCode: error.code };
       }
 
       if (!data.session) {
@@ -133,6 +172,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [loadProfile],
   );
 
+  const resendConfirmation = useCallback(async (email: string): Promise<AuthResult> => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+      options: { emailRedirectTo: getAuthRedirectUrl() },
+    });
+
+    return error ? { error: error.message, errorCode: error.code } : {};
+  }, []);
+
   const refreshProfile = useCallback(async () => {
     if (session) {
       await loadProfile(session.user.id);
@@ -148,6 +197,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signIn,
       signOut,
       createInitialManager,
+      resendConfirmation,
       claimInitialManager,
       refreshProfile,
     }),
@@ -158,6 +208,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       profile,
       profileError,
       refreshProfile,
+      resendConfirmation,
       session,
       signIn,
       signOut,
