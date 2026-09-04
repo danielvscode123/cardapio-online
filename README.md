@@ -55,6 +55,7 @@ Com o Supabase CLI autenticado e o projeto vinculado:
 ```powershell
 npx supabase login
 npx supabase link --project-ref SEU_PROJECT_REF
+npx supabase config push
 npx supabase db push
 npx supabase functions deploy manage-employee
 ```
@@ -64,7 +65,7 @@ A função `manage-employee` usa `SUPABASE_SERVICE_ROLE_KEY` somente no servidor
 Depois da publicação:
 
 1. Abra o aplicativo e selecione **Criar primeiro gerente**.
-2. Cadastre o gerente. Se a confirmação de e-mail estiver ativa, confirme e entre novamente.
+2. Cadastre o gerente. A confirmação de e-mail está desativada em `supabase/config.toml`, então o primeiro acesso é criado e autenticado imediatamente.
 3. Abra **Gestão** para criar os acessos dos funcionários.
 4. Funcionários verão as abas **Garçom**, **Cozinha** e **Caixa**.
 
