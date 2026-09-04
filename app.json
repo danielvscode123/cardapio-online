@@ -30,8 +30,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#17382D",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/images/pizza-splash.png",
+          "imageWidth": 148
         }
       ],
       "expo-sqlite"
