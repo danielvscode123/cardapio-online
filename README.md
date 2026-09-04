@@ -48,7 +48,7 @@ Também é possível testar no navegador com `npm run web`.
 
 ## Configurar o Supabase
 
-O schema completo está em [`supabase/migrations/20260904043825_initial_restaurant_schema.sql`](supabase/migrations/20260904043825_initial_restaurant_schema.sql). Ele cria as tabelas, índices, RLS, RPCs transacionais, publicação Realtime, 12 mesas e um cardápio demonstrativo.
+O schema completo está em [`supabase/migrations/20260904053901_initial_restaurant_schema.sql`](supabase/migrations/20260904053901_initial_restaurant_schema.sql). Ele cria as tabelas, índices, RLS, RPCs transacionais, publicação Realtime, 12 mesas e um cardápio demonstrativo.
 
 Com o Supabase CLI autenticado e o projeto vinculado:
 

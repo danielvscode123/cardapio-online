@@ -176,7 +176,7 @@ export async function sendOrder(input: SendOrderInput) {
       quantity: item.quantity,
       notes: item.notes,
     })),
-    p_notes: input.notes ?? null,
+    p_notes: input.notes?.trim() || undefined,
     p_idempotency_key: input.idempotencyKey,
   });
   throwIfError(error);

@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 import { env } from '@/lib/env';
+import { Database } from '@/types/database';
 
 const serverStorage = {
   getItem: () => null,
@@ -16,7 +17,7 @@ const authStorage = typeof globalThis.localStorage === 'undefined'
   ? serverStorage
   : globalThis.localStorage;
 
-export const supabase = createClient(env.supabaseUrl, env.supabasePublishableKey, {
+export const supabase = createClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
     storage: authStorage,
     autoRefreshToken: true,
