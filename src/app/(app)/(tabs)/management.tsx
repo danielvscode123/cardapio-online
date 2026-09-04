@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Redirect } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -23,7 +23,13 @@ import { IconifyIcon } from '@/components/ui/iconify-icon';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { colors, fonts, radius, shadow, spacing } from '@/constants/theme';
-import { useCreateEmployee, useEmployees, useSetEmployeeActive } from '@/features/management/queries';
+import {
+  useCreateEmployee,
+  useDeleteEmployee,
+  useEmployees,
+  useSetEmployeeActive,
+  useUpdateEmployee,
+} from '@/features/management/queries';
 import { Employee } from '@/features/management/types';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -35,48 +41,117 @@ const employeeSchema = z.object({
 
 type EmployeeForm = z.infer<typeof employeeSchema>;
 
+const editEmployeeSchema = z.object({
+  name: z.string().trim().min(2, 'Digite o nome do funcionário.'),
+  email: z.email('Digite um e-mail válido.'),
+  password: z.string().refine(
+    (password) => password.length === 0 || password.length >= 8,
+    'Use pelo menos 8 caracteres ou deixe em branco.',
+  ),
+});
+
+type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
+
+type EmployeeActionProps = {
+  accessibilityLabel: string;
+  color?: string;
+  disabled: boolean;
+  icon: `${string}:${string}`;
+  label: string;
+  loading?: boolean;
+  onPress: () => void;
+};
+
+function EmployeeAction({
+  accessibilityLabel,
+  color = colors.ink,
+  disabled,
+  icon,
+  label,
+  loading = false,
+  onPress,
+}: EmployeeActionProps) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.employeeAction,
+        disabled && styles.actionDisabled,
+        pressed && styles.pressed,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color={color} size="small" />
+      ) : (
+        <IconifyIcon color={color} icon={icon} size={18} />
+      )}
+      <Text style={[styles.employeeActionText, { color }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function EmployeeCard({
   employee,
-  loading,
+  loadingAction,
+  onDelete,
+  onEdit,
   onToggle,
 }: {
   employee: Employee;
-  loading: boolean;
+  loadingAction: 'delete' | 'toggle' | null;
+  onDelete: () => void;
+  onEdit: () => void;
   onToggle: () => void;
 }) {
+  const busy = loadingAction !== null;
+
   return (
     <View style={styles.employeeCard}>
-      <View style={[styles.avatar, !employee.active && styles.avatarInactive]}>
-        <Text style={styles.avatarText}>{employee.name.charAt(0).toUpperCase()}</Text>
-      </View>
-      <View style={styles.employeeCopy}>
-        <Text numberOfLines={1} style={styles.employeeName}>{employee.name}</Text>
-        <Text numberOfLines={1} style={styles.employeeEmail}>{employee.email}</Text>
-        <View style={styles.employeeRole}>
-          <View style={[styles.statusDot, { backgroundColor: employee.active ? colors.success : colors.muted }]} />
-          <Text style={styles.employeeRoleText}>{employee.active ? 'Funcionário ativo' : 'Acesso suspenso'}</Text>
+      <View style={styles.employeeMain}>
+        <View style={[styles.avatar, !employee.active && styles.avatarInactive]}>
+          <Text style={styles.avatarText}>{employee.name.charAt(0).toUpperCase()}</Text>
+        </View>
+        <View style={styles.employeeCopy}>
+          <Text numberOfLines={1} style={styles.employeeName}>{employee.name}</Text>
+          <Text numberOfLines={1} style={styles.employeeEmail}>{employee.email}</Text>
+          <View style={styles.employeeRole}>
+            <View style={[styles.statusDot, { backgroundColor: employee.active ? colors.success : colors.muted }]} />
+            <Text style={styles.employeeRoleText}>{employee.active ? 'Funcionário ativo' : 'Acesso suspenso'}</Text>
+          </View>
         </View>
       </View>
-      <Pressable
-        accessibilityLabel={employee.active ? `Suspender ${employee.name}` : `Ativar ${employee.name}`}
-        disabled={loading}
-        onPress={onToggle}
-        style={({ pressed }) => [
-          styles.toggleButton,
-          employee.active ? styles.toggleActive : styles.toggleInactive,
-          pressed && styles.pressed,
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.ink} size="small" />
-        ) : (
-          <IconifyIcon
-            color={employee.active ? colors.success : colors.muted}
-            icon={employee.active ? 'solar:shield-check-bold' : 'solar:shield-cross-bold'}
-            size={22}
-          />
-        )}
-      </Pressable>
+
+      <View style={styles.employeeDivider} />
+      <View style={styles.employeeActions}>
+        <EmployeeAction
+          accessibilityLabel={`Editar ${employee.name}`}
+          disabled={busy}
+          icon="solar:pen-2-bold-duotone"
+          label="Editar"
+          onPress={onEdit}
+        />
+        <EmployeeAction
+          accessibilityLabel={employee.active ? `Suspender ${employee.name}` : `Ativar ${employee.name}`}
+          color={employee.active ? colors.success : colors.muted}
+          disabled={busy}
+          icon={employee.active ? 'solar:shield-check-bold' : 'solar:shield-cross-bold'}
+          label={employee.active ? 'Suspender' : 'Ativar'}
+          loading={loadingAction === 'toggle'}
+          onPress={onToggle}
+        />
+        <EmployeeAction
+          accessibilityLabel={`Excluir ${employee.name}`}
+          color={colors.danger}
+          disabled={busy}
+          icon="solar:trash-bin-trash-bold-duotone"
+          label="Excluir"
+          loading={loadingAction === 'delete'}
+          onPress={onDelete}
+        />
+      </View>
     </View>
   );
 }
@@ -189,12 +264,142 @@ function NewEmployeeModal({ visible, onClose }: { visible: boolean; onClose: () 
   );
 }
 
+function EditEmployeeModal({
+  employee,
+  onClose,
+}: {
+  employee: Employee | null;
+  onClose: () => void;
+}) {
+  const updateEmployee = useUpdateEmployee();
+  const { control, handleSubmit, reset } = useForm<EditEmployeeForm>({
+    resolver: zodResolver(editEmployeeSchema),
+    defaultValues: { name: '', email: '', password: '' },
+  });
+
+  useEffect(() => {
+    if (employee) {
+      reset({ name: employee.name, email: employee.email, password: '' });
+    }
+  }, [employee, reset]);
+
+  const close = () => {
+    if (updateEmployee.isPending) return;
+    onClose();
+  };
+
+  const submit = handleSubmit(async (values) => {
+    if (!employee) return;
+
+    try {
+      await updateEmployee.mutateAsync({
+        userId: employee.id,
+        name: values.name,
+        email: values.email,
+        password: values.password || undefined,
+      });
+      close();
+      Alert.alert('Dados atualizados', `O acesso de ${values.name} foi atualizado.`);
+    } catch (error) {
+      Alert.alert('Não foi possível editar', error instanceof Error ? error.message : 'Tente novamente.');
+    }
+  });
+
+  return (
+    <Modal animationType="slide" onRequestClose={close} transparent visible={employee !== null}>
+      <View style={styles.modalBackdrop}>
+        <SafeAreaView edges={['bottom']} style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeading}>
+              <Text style={styles.modalEyebrow}>EDITAR ACESSO</Text>
+              <Text numberOfLines={1} style={styles.modalTitle}>Dados do funcionário</Text>
+            </View>
+            <Pressable accessibilityLabel="Fechar" onPress={close} style={styles.closeButton}>
+              <IconifyIcon icon="solar:close-circle-linear" size={26} color={colors.ink} />
+            </Pressable>
+          </View>
+
+          <View style={styles.form}>
+            <Controller
+              control={control}
+              name="name"
+              render={({ field: { onBlur, onChange, value }, fieldState: { error } }) => (
+                <TextField
+                  autoCapitalize="words"
+                  error={error?.message}
+                  label="Nome"
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  placeholder="Nome do funcionário"
+                  value={value}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onBlur, onChange, value }, fieldState: { error } }) => (
+                <TextField
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  error={error?.message}
+                  keyboardType="email-address"
+                  label="E-mail de acesso"
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  placeholder="funcionario@restaurante.com"
+                  value={value}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onBlur, onChange, value }, fieldState: { error } }) => (
+                <TextField
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  error={error?.message}
+                  label="Nova senha (opcional)"
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  placeholder="Deixe em branco para manter"
+                  secureTextEntry
+                  value={value}
+                />
+              )}
+            />
+          </View>
+
+          <View style={styles.accessNote}>
+            <IconifyIcon icon="solar:info-circle-bold" size={20} color={colors.ink} />
+            <Text style={styles.accessNoteText}>
+              Ao alterar o e-mail ou a senha, os novos dados passam a valer no próximo login.
+            </Text>
+          </View>
+
+          <Button
+            icon="solar:diskette-bold-duotone"
+            label="Salvar alterações"
+            loading={updateEmployee.isPending}
+            onPress={() => void submit()}
+          />
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ManagementScreen() {
   const { profile } = useAuth();
   const employeesQuery = useEmployees();
   const setActive = useSetEmployeeActive();
+  const deleteEmployee = useDeleteEmployee();
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   if (profile?.role !== 'manager') {
     return <Redirect href="/(app)/(tabs)/waiter" />;
@@ -223,6 +428,31 @@ export default function ManagementScreen() {
               Alert.alert('Não foi possível atualizar', error instanceof Error ? error.message : 'Tente novamente.');
             } finally {
               setUpdatingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDelete = (employee: Employee) => {
+    Alert.alert(
+      'Excluir funcionário?',
+      `${employee.name} perderá o acesso e sairá da equipe. Os pedidos e pagamentos lançados por essa pessoa continuarão no histórico.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(employee.id);
+            try {
+              await deleteEmployee.mutateAsync(employee.id);
+              Alert.alert('Funcionário excluído', `O acesso de ${employee.name} foi removido.`);
+            } catch (error) {
+              Alert.alert('Não foi possível excluir', error instanceof Error ? error.message : 'Tente novamente.');
+            } finally {
+              setDeletingId(null);
             }
           },
         },
@@ -292,7 +522,15 @@ export default function ManagementScreen() {
             renderItem={({ item }) => (
               <EmployeeCard
                 employee={item}
-                loading={updatingId === item.id}
+                loadingAction={
+                  deletingId === item.id
+                    ? 'delete'
+                    : updatingId === item.id
+                      ? 'toggle'
+                      : null
+                }
+                onDelete={() => handleDelete(item)}
+                onEdit={() => setSelectedEmployee(item)}
                 onToggle={() => handleToggle(item)}
               />
             )}
@@ -302,6 +540,7 @@ export default function ManagementScreen() {
       </Screen>
 
       <NewEmployeeModal onClose={() => setModalVisible(false)} visible={modalVisible} />
+      <EditEmployeeModal employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} />
     </>
   );
 }
@@ -358,10 +597,13 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: radius.lg,
     backgroundColor: colors.cream,
+    gap: spacing.md,
+    ...shadow.card,
+  },
+  employeeMain: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    ...shadow.card,
   },
   avatar: {
     width: 48,
@@ -379,16 +621,21 @@ const styles = StyleSheet.create({
   employeeRole: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   employeeRoleText: { color: colors.muted, fontFamily: fonts.bodyBold, fontSize: 9 },
-  toggleButton: {
-    width: 46,
-    height: 46,
-    borderWidth: 1,
+  employeeDivider: { height: 1, backgroundColor: colors.line },
+  employeeActions: { flexDirection: 'row', gap: spacing.sm },
+  employeeAction: {
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
+    backgroundColor: colors.canvas,
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
   },
-  toggleActive: { borderColor: '#BEDCCB', backgroundColor: '#E2F0E8' },
-  toggleInactive: { borderColor: colors.line, backgroundColor: colors.canvas },
+  employeeActionText: { fontFamily: fonts.bodyBold, fontSize: 10 },
+  actionDisabled: { opacity: 0.5 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(18, 36, 30, 0.55)' },
   modalSheet: {
@@ -402,6 +649,7 @@ const styles = StyleSheet.create({
   },
   modalHandle: { alignSelf: 'center', width: 46, height: 5, borderRadius: 3, backgroundColor: colors.line },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalHeading: { minWidth: 0, flex: 1, paddingRight: spacing.md },
   modalEyebrow: { color: colors.tomato, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.3 },
   modalTitle: { color: colors.ink, fontFamily: fonts.display, fontSize: 28 },
   closeButton: {

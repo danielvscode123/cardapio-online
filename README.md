@@ -7,7 +7,7 @@ Aplicativo mobile de comanda para restaurantes. A equipe abre uma mesa, envia pe
 - **Garçom:** mapa do salão, abertura da mesa, cardápio por categoria, observações e envio do pedido.
 - **Cozinha:** fila em tempo real e transições Recebido → Em preparo → Pronto.
 - **Caixa:** totais por mesa, pagamento em Pix, dinheiro, crédito, débito ou outro e liberação da mesa.
-- **Gerente:** tudo que um funcionário acessa, mais cadastro e suspensão de funcionários.
+- **Gerente:** tudo que um funcionário acessa, mais cadastro, edição, suspensão e exclusão de funcionários com preservação do histórico.
 - **Primeiro acesso:** criação segura do primeiro gerente; os próximos usuários são criados pelo painel de Gestão.
 
 As comandas pagas são encerradas, não apagadas. Isso mantém o histórico e deixa a mesa disponível para um novo atendimento.

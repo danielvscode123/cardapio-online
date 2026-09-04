@@ -7,3 +7,10 @@ export type CreateEmployeeInput = {
   email: string;
   password: string;
 };
+
+export type UpdateEmployeeInput = {
+  userId: string;
+  name: string;
+  email: string;
+  password?: string;
+};
