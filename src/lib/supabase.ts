@@ -1,21 +1,11 @@
 import 'react-native-url-polyfill/auto';
-import 'expo-sqlite/localStorage/install';
 
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import { authStorage } from '@/lib/auth-storage';
 import { env } from '@/lib/env';
 import { Database } from '@/types/database';
-
-const serverStorage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-};
-
-const authStorage = typeof globalThis.localStorage === 'undefined'
-  ? serverStorage
-  : globalThis.localStorage;
 
 export const supabase = createClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
